@@ -1,0 +1,24 @@
+{
+  "name": "quarry",
+  "version": "1.0.0",
+  "description": "Quarry script for ComputerCraft turtles.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/quarry-harness.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Starkus/quarry.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Starkus/quarry/issues"
+  },
+  "homepage": "https://github.com/Starkus/quarry#readme",
+  "dependencies": {
+    "fengari": "^0.1.5"
+  }
+}

@@ -1,0 +1,445 @@
+os.loadAPI("inv")
+os.loadAPI("t")
+
+local x = 0
+local y = 0
+local z = 0
+local max = 16
+local deep = 64
+local facingfw = true
+local STATE_FILE = "quarry.state"
+
+local OK = 0
+local ERROR = 1
+local LAYERCOMPLETE = 2
+local OUTOFFUEL = 3
+local FULLINV = 4
+local BLOCKEDMOV = 5
+local USRINTERRUPT = 6
+
+local CHARCOALONLY = false
+local USEMODEM = false
+local RESETSTATE = false
+
+function saveState()
+	local file = fs.open(STATE_FILE, "w")
+	if file == nil then
+		printError("Could not save quarry state")
+		return false
+	end
+
+	file.write(textutils.serialize({
+		x = x,
+		y = y,
+		z = z,
+		max = max,
+		deep = deep,
+		facingfw = facingfw,
+		charcoalOnly = CHARCOALONLY,
+		useModem = USEMODEM,
+	}))
+	file.close()
+	return true
+end
+
+function loadState()
+	if not fs.exists(STATE_FILE) then
+		return false
+	end
+
+	local file = fs.open(STATE_FILE, "r")
+	if file == nil then
+		printError("Could not read quarry state")
+		return false
+	end
+
+	local data = textutils.unserialize(file.readAll())
+	file.close()
+
+	if type(data) ~= "table" then
+		printError("Ignoring invalid quarry state")
+		return false
+	end
+
+	x = data.x or 0
+	y = data.y or 0
+	z = data.z or 0
+	max = data.max or max
+	deep = data.deep or deep
+	CHARCOALONLY = data.charcoalOnly or CHARCOALONLY
+	USEMODEM = data.useModem or USEMODEM
+	facingfw = data.facingfw
+	if facingfw == nil then
+		facingfw = true
+	end
+	return true
+end
+
+function clearState()
+	if fs.exists(STATE_FILE) then
+		fs.delete(STATE_FILE)
+	end
+end
+
+
+-- Arguments
+local tArgs = {...}
+for i=1,#tArgs do
+	local arg = tArgs[i]
+	if string.find(arg, "-") == 1 then
+		for c=2,string.len(arg) do
+			local ch = string.sub(arg,c,c)
+			if ch == 'c' then
+				CHARCOALONLY = true
+			elseif ch == 'm' then
+				USEMODEM = true
+			elseif ch == 'r' then
+				RESETSTATE = true
+			else
+				write("Invalid flag '")
+				write(ch)
+				print("'")
+			end
+		end
+	end
+end
+
+
+function out(s)
+
+	local s2 = s .. " @ [" .. x .. ", " .. y .. ", " .. z .. "]"
+			
+	print(s2)
+	if USEMODEM then
+		rednet.broadcast(s2, "miningTurtle")
+	end  
+end
+
+function dropInChest()
+	turtle.turnLeft()
+	
+	local success, data = turtle.inspect()
+	
+	if not success and inv.selectItem("minecraft:chest") then
+		turtle.place()
+		success, data = turtle.inspect()
+	end
+	
+	if success then
+		if data.name == "minecraft:chest" then
+		
+			out("Dropping items in chest")
+			
+			for i=1, 16 do
+				turtle.select(i)
+				
+				local item = turtle.getItemDetail()
+				
+				if item ~= nil and not isFuelToKeep(item) then
+
+					turtle.drop()
+				end
+			end
+		end
+	end
+	
+	turtle.turnRight()
+	
+end
+
+function isFuelToKeep(item)
+	if item.name == "minecraft:charcoal" then
+		return true
+	end
+
+	if item.name == "minecraft:coal" then
+		if CHARCOALONLY then
+			return item.damage == 1
+		end
+		return true
+	end
+
+	return false
+end
+
+function goDown()
+	while true do
+		if turtle.getFuelLevel() <= fuelNeededToGoBack() then
+			if not refuel() then
+				return OUTOFFUEL
+			end
+		end
+	
+		if not turtle.down() then
+			return OK
+		end
+		z = z-1
+		saveState()
+	end
+end
+
+function fuelNeededToGoBack()
+	return -z + x + y + 2
+end
+
+function refuel()
+	for i=1, 16 do
+		-- Only run on Charcoal
+		turtle.select(i)
+		
+		local item = turtle.getItemDetail()
+		if item and
+				(item.name == "minecraft:charcoal" or (item.name == "minecraft:coal" and
+				(CHARCOALONLY == false or item.damage == 1))) and
+				turtle.refuel(1) then
+			return true
+		end
+	end
+	
+	return false
+end
+
+function moveH()
+	if inv.isInventoryFull() then
+		out("Dropping thrash")
+		inv.dropThrash()
+		
+		if inv.isInventoryFull() then
+			out ("Stacking items")
+			inv.stackItems()
+		end
+		
+		if inv.isInventoryFull() then
+			out("Full inventory!")
+			return FULLINV  
+		end
+	end
+	
+	if turtle.getFuelLevel() <= fuelNeededToGoBack() then
+		if not refuel() then
+			out("Out of fuel!")
+			return OUTOFFUEL
+		end
+	end
+	
+	if facingfw and y<max-1 then
+	-- Going one way
+		local dugFw = t.dig()
+		if dugFw == false then
+			out("Hit bedrock, can't keep going")
+			return BLOCKEDMOV
+		end
+		t.digUp()
+		t.digDown()
+	
+		if t.fw() == false then
+			return BLOCKEDMOV
+		end
+		
+		y = y+1
+		saveState()
+	
+	elseif not facingfw and y>0 then
+	-- Going the other way
+		t.dig()
+		t.digUp()
+		t.digDown()
+		
+		if t.fw() == false then
+			return BLOCKEDMOV
+		end
+		
+		y = y-1
+		saveState()
+		
+	else
+		if x+1 >= max then
+			t.digUp()
+			t.digDown()
+			return LAYERCOMPLETE -- Done with this Y level
+		end
+		
+		-- If not done, turn around
+		if facingfw then
+			turtle.turnRight()
+		else
+			turtle.turnLeft()
+		end
+		
+		t.dig()
+		t.digUp()
+		t.digDown()
+		
+		if t.fw() == false then
+			return BLOCKEDMOV
+		end
+		
+		x = x+1
+		
+		if facingfw then
+			turtle.turnRight()
+		else
+			turtle.turnLeft()
+		end
+		
+		facingfw = not facingfw
+		saveState()
+	end
+	
+	return OK
+end
+
+function digLayer()
+	
+	local errorcode = OK
+
+	while errorcode == OK do
+		if USEMODEM then
+			local _, msg = rednet.receive(1)
+			if msg ~= nil and string.find(msg, "return") ~= nil then
+				return USRINTERRUPT
+			end
+		end
+		errorcode = moveH()
+	end
+	
+	if errorcode == LAYERCOMPLETE then
+		return OK
+	end
+	
+	return errorcode  
+end
+
+function goToOrigin()
+	
+	if facingfw then
+		
+		turtle.turnLeft()
+		
+		while x > 0 do
+			t.fw()
+			x = x-1
+			saveState()
+		end
+		
+		turtle.turnLeft()
+		
+		while y > 0 do
+			t.fw()
+			y = y-1
+			saveState()
+		end
+		
+		turtle.turnRight()
+		turtle.turnRight()
+		
+	else
+		
+		turtle.turnRight()
+		
+		while x > 0 do
+			t.fw()
+			x = x-1
+			saveState()
+		end
+		
+		turtle.turnLeft()
+		
+		while y > 0 do
+			t.fw()
+			y = y-1
+			saveState()
+		end
+		
+		turtle.turnRight()
+		turtle.turnRight()
+		
+	end
+	
+	x = 0
+	y = 0
+	facingfw = true
+	saveState()
+	
+end
+
+function goUp()
+
+	while z < 0 do
+		
+		t.up()
+		
+		z = z+1
+		saveState()
+		
+	end
+	
+	goToOrigin()
+	
+end
+
+function mainloop()
+
+	while true do
+
+		local errorcode = digLayer()
+	
+		if errorcode ~= OK then
+			goUp()
+			return errorcode
+		end
+		
+		goToOrigin()
+		
+		for i=1, 3 do
+			t.digDown()
+			local success = t.down()
+		
+			if not success then
+				goUp()
+				return BLOCKEDMOV
+			end
+
+			z = z-1
+			out("Z: " .. z)
+			saveState()
+
+		end
+	end
+end
+
+if RESETSTATE then
+	clearState()
+end
+
+local resumed = loadState()
+
+if USEMODEM then
+	rednet.open("right")
+end
+
+out("\n\n\n-- WELCOME TO THE MINING TURTLE --\n\n")
+if resumed then
+	out("Loaded saved quarry state")
+else
+	saveState()
+end
+
+while true do
+
+	local errorcode = goDown()
+	if errorcode ~= OK then
+		break
+	end
+
+	errorcode = mainloop()
+	dropInChest()
+	
+	if errorcode ~= FULLINV then
+		break
+	end
+end
+
+if USEMODEM then
+	rednet.close("right")
+end
