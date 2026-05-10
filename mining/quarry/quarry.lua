@@ -166,19 +166,28 @@ function waitForFleetStart()
 	end
 end
 
+function isHomeChest(name)
+	return name == "minecraft:chest" or string.match(name, ":chest$") ~= nil
+end
+
+function selectHomeChest()
+	return inv.selectItemWhere(function(item)
+		return isHomeChest(item.name) and item.name ~= "minecraft:trapped_chest"
+	end)
+end
+
 function ensureHomeChest()
 	turtle.turnLeft()
 	
 	local success, data = turtle.inspect()
 	
-	if not success and inv.selectItem("minecraft:chest") then
-		turtle.place()
+	if not success and selectHomeChest() and turtle.place() then
 		success, data = turtle.inspect()
 	end
 
 	turtle.turnRight()
 
-	return success and data.name == "minecraft:chest"
+	return success and isHomeChest(data.name)
 end
 
 function dropInChest()
@@ -187,7 +196,7 @@ function dropInChest()
 	local success, data = turtle.inspect()
 	
 	if success then
-		if data.name == "minecraft:chest" then
+		if isHomeChest(data.name) then
 		
 			out("Dropping items in chest")
 			

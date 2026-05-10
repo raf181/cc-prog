@@ -71,6 +71,17 @@ function selectItem(name)
 	return false
 end
 
+function selectItemWhere(matches)
+	for i=1, 16 do
+		local data = turtle.getItemDetail(i)
+		if data and matches(data) then
+			turtle.select(i)
+			return true
+		end
+	end
+	return false
+end
+
 function getItemCount(name)
 	local count = 0
 	for i=1, 16 do
