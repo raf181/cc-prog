@@ -115,7 +115,7 @@ function out(s)
 	end  
 end
 
-function dropInChest()
+function ensureHomeChest()
 	turtle.turnLeft()
 	
 	local success, data = turtle.inspect()
@@ -124,6 +124,16 @@ function dropInChest()
 		turtle.place()
 		success, data = turtle.inspect()
 	end
+
+	turtle.turnRight()
+
+	return success and data.name == "minecraft:chest"
+end
+
+function dropInChest()
+	turtle.turnLeft()
+	
+	local success, data = turtle.inspect()
 	
 	if success then
 		if data.name == "minecraft:chest" then
@@ -423,6 +433,10 @@ if resumed then
 	out("Loaded saved quarry state")
 else
 	saveState()
+end
+
+if not ensureHomeChest() then
+	out("No home chest on the left")
 end
 
 while true do

@@ -485,7 +485,7 @@ function testPlacesChestOnLeftAtOrigin() {
   const h = makeHarness();
   h.addItem("minecraft:chest", 1);
   const L = h.loadQuarryDefinitions();
-  h.callGlobal(L, "dropInChest");
+  h.callGlobal(L, "ensureHomeChest");
 
   assert.equal(h.world.get(key({ x: -1, y: 0, z: 0 })), "minecraft:chest");
 }
