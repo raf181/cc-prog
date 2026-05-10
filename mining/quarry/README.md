@@ -11,11 +11,32 @@ Easiest way I know of installing quarry in your turtle is to download the setup 
 and then run it. The setup script downloads the latest scripts from this repository, so pushing an update to GitHub makes future turtle installs current without republishing every script to Pastebin.
 Then just run `quarry`, there are a few flags you can specify:
 
-`quarry [-m] [-c]`
+`quarry [-m] [-c] [-r] [-w]`
 
 `-m` indicates to use a modem to broadcast status messages.
 `-c` means to use only Charcoal as fuel, if you don't want it to consume any coal it mines.
+`-r` resets saved quarry progress and starts fresh.
+`-w` waits for a fleet `start` command over rednet before mining. It also enables modem mode.
 More flags and customization to come.
+
+# Fleet mining
+For a 32x32 area, place four turtles so each turtle owns one 16x16 quadrant. Put a modem on the right side of every turtle and on the controller computer.
+
+On each turtle:
+
+```lua
+wget run https://raw.githubusercontent.com/raf181/cc-prog/main/mining/quarry/setup.lua
+quarry -rw
+```
+
+On the controller computer:
+
+```lua
+wget run https://raw.githubusercontent.com/raf181/cc-prog/main/mining/quarry/setup.lua
+fleet
+```
+
+The controller shows each turtle's current `z` height, fuel, status event, and totals for kept non-trash inventory. Commands are `start`, `return`, `stop`, `reset`, `clear`, and `quit`.
 
 # Publishing the setup paste
 Pastebin's API can create and delete pastes, but it cannot edit an existing paste in place. Keep the Pastebin entry as a tiny `setup.lua` bootstrapper that downloads the latest files from GitHub.

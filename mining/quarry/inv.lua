@@ -82,20 +82,60 @@ function getItemCount(name)
 	return count
 end
 
-function dropThrash()
-	local thrash = {"minecraft:stone", "minecraft:granite", "minecraft:andesite", "minecraft:diorite", "minecraft:cobbled_deepslate", "minecraft:tuff", "minecraft:dirt", "minecraft:coarse_dirt", "minecraft:gravel", "minecraft:sand", "minecraft:red_sand", "minecraft:cobblestone", "minecraft:sandstone", "minecraft:red_sandstone", "minecraft:bedrock", "chisel:limestone", "chisel:marble", "chisel:diorite", "chisel:granite", "chisel:andesite", "harvestcraft:salt"}
+local thrash = {
+	"minecraft:stone",
+	"minecraft:granite",
+	"minecraft:andesite",
+	"minecraft:diorite",
+	"minecraft:cobbled_deepslate",
+	"minecraft:tuff",
+	"minecraft:dirt",
+	"minecraft:coarse_dirt",
+	"minecraft:gravel",
+	"minecraft:sand",
+	"minecraft:red_sand",
+	"minecraft:cobblestone",
+	"minecraft:sandstone",
+	"minecraft:red_sandstone",
+	"minecraft:bedrock",
+	"chisel:limestone",
+	"chisel:marble",
+	"chisel:diorite",
+	"chisel:granite",
+	"chisel:andesite",
+	"harvestcraft:salt",
+}
 
+function isThrash(name)
+	for i=1, #thrash do
+		if name == thrash[i] then
+			return true
+		end
+	end
+	return false
+end
+
+function getKeptCounts()
+	local counts = {}
+	for i=1, 16 do
+		local details = turtle.getItemDetail(i)
+		if details and not isThrash(details.name) then
+			counts[details.name] = (counts[details.name] or 0) + details.count
+		end
+	end
+	return counts
+end
+
+function dropThrash()
 	for i=1, 16 do
 	
 		local details = turtle.getItemDetail(i)
 		
 		if details then
 		
-			for j=1, #thrash do
-				if details.name == thrash[j] then
-					turtle.select(i)
-					turtle.drop()
-				end
+			if isThrash(details.name) then
+				turtle.select(i)
+				turtle.drop()
 			end
 		end
 	end

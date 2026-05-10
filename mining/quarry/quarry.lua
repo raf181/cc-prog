@@ -20,6 +20,9 @@ local USRINTERRUPT = 6
 local CHARCOALONLY = false
 local USEMODEM = false
 local RESETSTATE = false
+local WAITSTART = false
+local FLEET_PROTOCOL = "quarryFleet"
+local FLEET_GROUP = "quarry"
 
 function saveState()
 	local file = fs.open(STATE_FILE, "w")
@@ -95,6 +98,9 @@ for i=1,#tArgs do
 				USEMODEM = true
 			elseif ch == 'r' then
 				RESETSTATE = true
+			elseif ch == 'w' then
+				WAITSTART = true
+				USEMODEM = true
 			else
 				write("Invalid flag '")
 				write(ch)
@@ -113,6 +119,51 @@ function out(s)
 	if USEMODEM then
 		rednet.broadcast(s2, "miningTurtle")
 	end  
+end
+
+function fleetReport(event, detail)
+	if not USEMODEM then
+		return
+	end
+
+	rednet.broadcast({
+		type = "quarryStatus",
+		group = FLEET_GROUP,
+		id = os.getComputerID(),
+		label = os.getComputerLabel and os.getComputerLabel() or nil,
+		event = event,
+		detail = detail,
+		x = x,
+		y = y,
+		z = z,
+		facingfw = facingfw,
+		fuel = turtle.getFuelLevel(),
+		kept = inv.getKeptCounts(),
+	}, FLEET_PROTOCOL)
+end
+
+function isFleetCommand(msg, command)
+	return type(msg) == "table" and
+			msg.type == "quarryCommand" and
+			msg.group == FLEET_GROUP and
+			msg.command == command
+end
+
+function waitForFleetStart()
+	out("Waiting for fleet start")
+	fleetReport("waiting", "Waiting for fleet start")
+
+	while true do
+		local _, msg = rednet.receive(FLEET_PROTOCOL)
+		if isFleetCommand(msg, "start") then
+			fleetReport("started", "Fleet start received")
+			return
+		elseif isFleetCommand(msg, "reset") then
+			clearState()
+			saveState()
+			fleetReport("reset", "State reset from fleet")
+		end
+	end
 end
 
 function ensureHomeChest()
@@ -221,6 +272,7 @@ function moveH()
 		
 		if inv.isInventoryFull() then
 			out("Full inventory!")
+			fleetReport("full", "Inventory full")
 			return FULLINV  
 		end
 	end
@@ -228,6 +280,7 @@ function moveH()
 	if turtle.getFuelLevel() <= fuelNeededToGoBack() then
 		if not refuel() then
 			out("Out of fuel!")
+			fleetReport("fuel", "Out of fuel")
 			return OUTOFFUEL
 		end
 	end
@@ -237,6 +290,7 @@ function moveH()
 		local dugFw = t.dig()
 		if dugFw == false then
 			out("Hit bedrock, can't keep going")
+			fleetReport("blocked", "Hit bedrock forward")
 			return BLOCKEDMOV
 		end
 		t.digUp()
@@ -248,6 +302,7 @@ function moveH()
 		
 		y = y+1
 		saveState()
+		fleetReport("progress", "Moved forward")
 	
 	elseif not facingfw and y>0 then
 	-- Going the other way
@@ -261,6 +316,7 @@ function moveH()
 		
 		y = y-1
 		saveState()
+		fleetReport("progress", "Moved back across row")
 		
 	else
 		if x+1 >= max then
@@ -294,6 +350,7 @@ function moveH()
 		
 		facingfw = not facingfw
 		saveState()
+		fleetReport("progress", "Started next row")
 	end
 	
 	return OK
@@ -305,8 +362,11 @@ function digLayer()
 
 	while errorcode == OK do
 		if USEMODEM then
-			local _, msg = rednet.receive(1)
-			if msg ~= nil and string.find(msg, "return") ~= nil then
+			local _, msg = rednet.receive(FLEET_PROTOCOL, 1)
+			if type(msg) == "string" and string.find(msg, "return") ~= nil then
+				return USRINTERRUPT
+			elseif isFleetCommand(msg, "return") or isFleetCommand(msg, "stop") then
+				fleetReport("returning", "Fleet return received")
 				return USRINTERRUPT
 			end
 		end
@@ -429,14 +489,23 @@ if USEMODEM then
 end
 
 out("\n\n\n-- WELCOME TO THE MINING TURTLE --\n\n")
-if resumed then
-	out("Loaded saved quarry state")
-else
-	saveState()
-end
+	if resumed then
+		out("Loaded saved quarry state")
+		fleetReport("resumed", "Loaded saved quarry state")
+	else
+		saveState()
+		fleetReport("ready", "New quarry state saved")
+	end
 
 if not ensureHomeChest() then
 	out("No home chest on the left")
+	fleetReport("warning", "No home chest on the left")
+else
+	fleetReport("chest", "Home chest ready")
+end
+
+if WAITSTART then
+	waitForFleetStart()
 end
 
 while true do
@@ -448,8 +517,10 @@ while true do
 
 	errorcode = mainloop()
 	dropInChest()
+	fleetReport("drop", "Dropped items in chest")
 	
 	if errorcode ~= FULLINV then
+		fleetReport("stopped", "Quarry stopped")
 		break
 	end
 end

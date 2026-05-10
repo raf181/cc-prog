@@ -4,6 +4,7 @@ local files = {
 	{ source = "t.lua", target = "t" },
 	{ source = "quarry.lua", target = "quarry" },
 	{ source = "farmTrees.lua", target = "farmTrees" },
+	{ source = "fleet.lua", target = "fleet" },
 }
 
 local owner = "raf181"
