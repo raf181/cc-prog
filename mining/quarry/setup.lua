@@ -9,7 +9,7 @@ local files = {
 
 local owner = "raf181"
 local repo = "cc-prog"
-local branch = "main"
+local branch = "fleet-beta"
 local basePath = "mining/quarry/"
 
 local function download(source, target)
